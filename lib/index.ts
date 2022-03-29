@@ -34,29 +34,21 @@ class DependencyLayerPackager {
   pluginConfig: DependencyLayerConfig;
   dockerServicePath = "/var/task";
 
-  // playbookNameAndExtendedConfig: Record<string, PlaybookEventsConfig>;
   constructor(serverless, options) {
     this.sls = serverless;
     this.options = options;
     this.pluginConfig = this.getPluginConfig();
     this.hooks = {
-      // Compile scheduled events after the constructor
-      // during the package:compileEvents lifecycle event
-      // because by then, serverless variables will be correctly
-      // resolved
-      // "package:compileFunctions": this.compilePlaybookResources.bind(this),
-      // "package:compileEvents": this.compileScheduledEvents.bind(this),
-
-      "before:package:createDeploymentArtifacts": () => {},
-      // BbPromise.bind(this)
-      //   .then(this.fetchConfig)
-      //   .then(this.pluginConfig.autoconfigArtifacts)
-      //   .then(() => {
-      //     Fse.ensureDirAsync(this.pluginConfig.buildDir);
-      //   })
-      //   .then(this.pluginConfig.setupDocker)
-      //   .then(this.pluginConfig.selectAll)
-      //   .map(this.pluginConfig.makePackage),
+      "before:package:createDeploymentArtifacts": () =>
+        BbPromise.bind(this)
+          // .then(this.fetchConfig)
+          .then(this.autoconfigArtifacts)
+          .then(() => {
+            fse.ensureDir(this.pluginConfig.buildDir);
+          })
+          .then(this.setupDocker)
+          .then(this.selectAll)
+          .map(this.makePackage),
 
       "after:deploy:deploy": () => BbPromise.bind(this).then(this.clean),
     };
@@ -168,16 +160,36 @@ class DependencyLayerPackager {
     }
   }
 
-  selectAll() {
-    const functions = _.reject(this.sls.service.functions, (target) => {
-      return target.runtime && !(target.runtime + "").match(/python/i);
-    });
+  // selectAll() {
+  //   const functions = _.reject(this.sls.service.functions, (target) => {
+  //     return target.runtime && !(target.runtime + "").match(/python/i);
+  //   });
 
-    const info = _.map(functions, (target) => {
+  //   const info = _.map(functions, (target) => {
+  //     return {
+  //       name: target.name,
+  //       includes: target.package.include,
+  //       artifact: target.package.artifact,
+  //     };
+  //   });
+  //   return info;
+  // }
+
+  selectAll(): Record<string, string>[] {
+    // const layers = _.reject(this.sls.service.layers, (target) => {
+    //   return target.runtime && !(target.runtime + "").match(/python/i);
+    // });
+
+    const layers = this.sls.service.layers;
+
+    const info = _.map(layers, (target) => {
       return {
+        path: target.path, // layer directory
+        compatibleRuntimes: target.compatibleRuntimes,
+        compatibleArchitectures: target.compatibleArchitectures,
         name: target.name,
-        includes: target.package.include,
-        artifact: target.package.artifact,
+        // includes: target.package.include,
+        // artifact: target.package.artifact,
       };
     });
     return info;
